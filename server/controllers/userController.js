@@ -1,7 +1,7 @@
 import { ApiError } from "../error/ApiError.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { User } from "../tableModels/models.js";
+import { Friend, User } from "../tableModels/models.js";
 import { Op } from "sequelize";
 import * as uuid from "uuid";
 import path from "path";
@@ -113,16 +113,29 @@ export class UserController {
           [Op.iLike]: `%${surname}%`,
         };
       }
-      return response.json(
-        await User.findAll({
-          where: {
-            id: {
-              [Op.notIn]: [id],
-            },
-            [Op.or]: condition,
+      const friends = await Friend.findAll({
+        where: {
+          userId: id,
+        },
+      });
+      const foundUsers = await User.findAll({
+        where: {
+          id: {
+            [Op.notIn]: [id],
           },
-        })
-      );
+          [Op.or]: condition,
+        },
+        attributes: {
+          exclude: ["email", "password"],
+        },
+      });
+      foundUsers.forEach((user) => {
+        user.setDataValue(
+          "isFriend",
+          friends.some((f) => f.friendId == user.id)
+        );
+      });
+      return response.json(foundUsers);
     } catch (e) {
       return next(ApiError.badRequest(e.message));
     }
